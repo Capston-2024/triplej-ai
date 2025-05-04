@@ -2,6 +2,9 @@ import joblib
 import numpy as np
 from keybert import KeyBERT
 from konlpy.tag import Okt
+import torch
+from transformers import BertModel, BertTokenizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 model = joblib.load("model/pickin_model.pkl")
 scaler = joblib.load("model/scaler.pkl")
@@ -9,6 +12,10 @@ label_encoders = joblib.load("model/label_encoders.pkl")
 
 kb_model = KeyBERT(model="distiluse-base-multilingual-cased-v1")
 okt = Okt() # 형태소 분석기 초기화
+
+tokenizer = BertTokenizer.from_pretrained('monologg/kobert')
+bert_model = BertModel.from_pretrained('monologg/kobert')
+bert_model.eval()
 
 def predict_label(request):
     input_data = np.array([[
@@ -40,11 +47,38 @@ def extract_keywords_from_sheet(request): # 스프레드시트 기반 키워드 
     ### todo ###
     return request
 
-def extract_sentence_embeddings(request): # 텍스트 기반 문장 임베딩 추출, 채용공고/자기소개서 공통
-    return request
+def get_kobert_embedding(text):
+    """
+    return_tensors="pt": PyTorch tensor로 변환
+    truncation=True: 512 토큰을 초과하는 경우 잘라내기
+    padding=True: 길이를 맞추기 위해 padding 추가
+    """
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
+    
+    with torch.no_grad(): # 불필요한 grad 계산 비활성화
+        outputs = bert_model(**inputs)
+    
+    last_hidden_state = outputs.last_hidden_state 
+    attention_mask = inputs['attention_mask']
 
-def calc_similarity(request): # 문장 임베딩 기반 유사도 계산
-    return request
+    mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+    masked_embeddings = last_hidden_state * mask
+    summed = torch.sum(masked_embeddings, dim=1)
+    summed_mask = torch.clamp(mask.sum(dim=1), min=1e-9)
+    mean_pooled = summed / summed_mask # 평균 풀링 방식을 활용하여 텍스트 전체의 의미 요약
+
+    return mean_pooled.squeeze().numpy() # numpy 배열로 변환 후 return
+
+def calc_similarity(request): # 텍스트 기반 유사도 계산
+    job = request.job
+    letter = request.letter
+
+    job_emb = get_kobert_embedding(job)
+    letter_emb = get_kobert_embedding(letter)
+
+    similarity = cosine_similarity([job_emb], [letter_emb])
+    
+    return similarity[0][0]
 
 def feedback(request): # 키워드 및 유사도 기반 정량적 피드백 & 텍스트 기반 정성적 피드백
     return request
