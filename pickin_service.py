@@ -5,6 +5,8 @@ from konlpy.tag import Okt
 import torch
 from transformers import BertModel, BertTokenizer
 from sklearn.metrics.pairwise import cosine_similarity
+from openai import OpenAI
+import os
 
 model = joblib.load("model/pickin_model.pkl")
 scaler = joblib.load("model/scaler.pkl")
@@ -16,6 +18,8 @@ okt = Okt() # 형태소 분석기 초기화
 tokenizer = BertTokenizer.from_pretrained('monologg/kobert')
 bert_model = BertModel.from_pretrained('monologg/kobert')
 bert_model.eval()
+
+client = OpenAI(api_key=os.getenv('OPENAI_APIKEY'))
 
 def predict_label(request):
     input_data = np.array([[
@@ -81,4 +85,26 @@ def calc_similarity(request): # 텍스트 기반 유사도 계산
     return similarity[0][0]
 
 def feedback(request): # 키워드 및 유사도 기반 정량적 피드백 & 텍스트 기반 정성적 피드백
-    return request
+    prompt = f"""
+    지원자의 자기소개서 내용: {request.letter}
+    채용공고 내용: {request.job}
+    지원자의 자기소개서에 포함되지 않거나 강조되지 않은 키워드: {', '.join(request.missing_keywords)}
+    채용공고와 지원자의 자기소개서 간 의미적 유사도: {request.similarity}
+    
+    위의 정보들을 바탕으로, 지원자의 자기소개서를 첨삭해줘. (아래와 같은 방향으로)
+    - 부족한 키워드를 자기소개서에 자연스럽게 추가할 수 있도록
+    - 채용공고에서 요구하는 인재상에 부합하도록
+    """
+
+    gpt = client.chat.completions.create(
+        model='gpt-4.1',
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=500,
+        temperature=0.7
+    )
+
+    response = gpt.choices[0].message.content.strip()
+    
+    return response
