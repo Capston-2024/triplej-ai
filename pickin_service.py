@@ -3,7 +3,8 @@ import numpy as np
 from keybert import KeyBERT
 from konlpy.tag import Okt
 import torch
-from transformers import BertModel, BertTokenizer
+from transformers import BertModel
+from kobert_transformers import get_tokenizer
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 import os
@@ -15,7 +16,7 @@ label_encoders = joblib.load("model/label_encoders.pkl")
 kb_model = KeyBERT(model="distiluse-base-multilingual-cased-v1")
 okt = Okt() # 형태소 분석기 초기화
 
-tokenizer = BertTokenizer.from_pretrained('monologg/kobert')
+tokenizer = get_tokenizer()
 bert_model = BertModel.from_pretrained('monologg/kobert')
 bert_model.eval()
 
@@ -84,7 +85,7 @@ def calc_similarity(request): # 텍스트 기반 유사도 계산
     
     return similarity[0][0]
 
-def feedback(request): # 키워드 및 유사도 기반 정량적 피드백 & 텍스트 기반 정성적 피드백
+def feedback_service(request): # 키워드 및 유사도 기반 정량적 피드백 & 텍스트 기반 정성적 피드백
     prompt = f"""
     지원자의 자기소개서 내용: {request.letter}
     채용공고 내용: {request.job}
@@ -94,6 +95,16 @@ def feedback(request): # 키워드 및 유사도 기반 정량적 피드백 & �
     위의 정보들을 바탕으로, 지원자의 자기소개서를 첨삭해줘. (아래와 같은 방향으로)
     - 부족한 키워드를 자기소개서에 자연스럽게 추가할 수 있도록
     - 채용공고에서 요구하는 인재상에 부합하도록
+
+    그리고 답변으로는 첨삭된 자기소개서만 포함되도록 해줘. 다른 사족은 전부 제외해줘. 
+
+    그리고 이런 형식으로 응답해줄래? 
+    문장 별로 이렇게 응답해줬으면 해. 
+    before: (첨삭 전 문장), after: (첨삭 후 문장), reason: (첨삭 이유)
+    그리고 이것들을 배열로 묶어서 json 형식처럼 표현해줘. 
+    key 값의 따옴표 빼주고 value 값은 따옴표로 묶어줘.
+
+    줄바꿈 기호는 다 빼줘. 그리고 줄바꿈 기호 앞뒤의 공백도 전부 없애줘. 
     """
 
     gpt = client.chat.completions.create(
