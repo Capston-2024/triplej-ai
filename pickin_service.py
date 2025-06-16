@@ -1,4 +1,5 @@
 import joblib
+from model.pickinIndex import get_pickin_scores
 import numpy as np
 from keybert import KeyBERT
 from konlpy.tag import Okt
@@ -8,6 +9,11 @@ from kobert_transformers import get_tokenizer
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 import os
+
+from dotenv import load_dotenv
+
+# load environment variables
+load_dotenv()
 
 model = joblib.load("model/pickin_model.pkl")
 scaler = joblib.load("model/scaler.pkl")
@@ -22,17 +28,8 @@ bert_model.eval()
 
 client = OpenAI(api_key=os.getenv('OPENAI_APIKEY'))
 
-def predict_label(request):
-    input_data = np.array([[
-        label_encoders['국적'].transform([request.nationality])[0],
-        label_encoders['최종학력'].transform([request.education])[0],
-        label_encoders['TOPIK'].transform([request.topik])[0],
-        label_encoders['관심직무'].transform([request.work])[0]
-    ]])
-
-    input_data_scaled = scaler.transform(input_data)
-    prediction = model.predict(input_data_scaled)
-    return int(prediction[0])
+def predict_pickin_score(request):
+    return get_pickin_scores(request.applicant_id)
 
 def extract_keywords_from_text(request): # 텍스트 기반 키워드 추출, 채용공고/자기소개서 공통
     noun_tokens = okt.nouns(request.text) # 명사 추출

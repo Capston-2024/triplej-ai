@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from pickin_service import predict_label, extract_keywords_from_text, extract_keywords_from_sheet, calc_similarity, feedback_service
+from pickin_service import predict_pickin_score, extract_keywords_from_text, extract_keywords_from_sheet, calc_similarity, feedback_service
 from schema.prediction_request import prediction_request
 from schema.text_keyword_extraction_request import text_keyword_extraction_request
 from schema.text_similarity_request import text_similarity_request
@@ -9,8 +9,7 @@ router = APIRouter()
 
 @router.post("/predict")
 def predict(request: prediction_request):
-    prediction = predict_label(request)
-    return {"prediction": prediction}
+    return predict_pickin_score(request)
 
 @router.post("/keywords/text") # 텍스트 기반 키워드 추출, 채용공고/자기소개서 공통
 def extract_keywords_from_text(request: text_keyword_extraction_request):
